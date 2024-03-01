@@ -10,8 +10,8 @@ sys.path.append("python/")
 import needle as ndl
 
 
-def parse_mnist(image_filesname, label_filename):
-    """Read an images and labels file in MNIST format.  See this page:
+def parse_mnist(image_filename, label_filename):
+    """ Read an images and labels file in MNIST format.  See this page:
     http://yann.lecun.com/exdb/mnist/ for a description of the file format.
 
     Args:
@@ -26,16 +26,34 @@ def parse_mnist(image_filesname, label_filename):
                 dimension of the data, e.g., since MNIST images are 28x28, it
                 will be 784.  Values should be of type np.float32, and the data
                 should be normalized to have a minimum value of 0.0 and a
-                maximum value of 1.0.
+                maximum value of 1.0 (i.e., scale original values of 0 to 0.0
+                and 255 to 1.0).
 
-            y (numpy.ndarray[dypte=np.int8]): 1D numpy array containing the
-                labels of the examples.  Values should be of type np.int8 and
+            y (numpy.ndarray[dtype=np.uint8]): 1D numpy array containing the
+                labels of the examples.  Values should be of type np.uint8 and
                 for MNIST will contain the values 0-9.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
+    ### BEGIN YOUR CODE
+    with gzip.open(image_filename) as image_file:
+        header = image_file.read(16)
+        magic, size, rows, cols = struct.unpack(">iiii", header)
+        if magic != 2051:
+            raise ValueError("Invalid magic number for image file")
+        image_file.seek(16)
+        pixels = image_file.read(size * rows * cols)
+        pixels = np.frombuffer(pixels, dtype=np.uint8).reshape((size, rows * cols))
+        X = pixels.astype(np.float32) / 255
+    with gzip.open(label_filename) as label_file:
+        header = label_file.read(8)
+        magic, size = struct.unpack(">ii", header)
+        if magic != 2049:
+            raise ValueError("Invalid magic number for label file")
+        label_file.seek(8)
+        labels = label_file.read(size)
+        labels = np.frombuffer(labels, dtype=np.uint8)
+        y = labels
+    return X, y
+    ### END YOUR CODE
 
 def softmax_loss(Z, y_one_hot):
     """Return softmax loss.  Note that for the purposes of this assignment,
@@ -54,7 +72,8 @@ def softmax_loss(Z, y_one_hot):
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    loss = ndl.log(ndl.exp(Z).sum(axes=(1,))) - (Z * y_one_hot).sum(axes=(1,))
+    return loss.sum() / Z.shape[0]
     ### END YOUR SOLUTION
 
 
@@ -83,7 +102,18 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
     """
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    for i in range(0, X.shape[0], batch):
+        X_batch = ndl.Tensor(X[i:i + batch])
+        y_batch = y[i:i + batch]
+        Z = ndl.relu(ndl.matmul(X_batch, W1))
+        Z = ndl.matmul(Z, W2)
+        I_y = np.zeros(Z.shape)
+        I_y[np.arange(len(y_batch)), y_batch] = 1
+        loss = softmax_loss(Z, ndl.Tensor(I_y))
+        loss.backward()
+        W1 = ndl.Tensor(W1.numpy() - lr * W1.grad.numpy())
+        W2 = ndl.Tensor(W2.numpy() - lr * W2.grad.numpy())
+    return W1, W2
     ### END YOUR SOLUTION
 
 
